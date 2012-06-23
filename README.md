@@ -8,10 +8,10 @@ It can be used with any major mode whatsoever - the only thing it handles is ind
 
 To use it add
 
-(require 'wmi)
-(add-hook 'php-mode-hook  (lambda () (wmi 1)))
-(add-hook 'css-mode-hook  (lambda () (wmi 1)))
-(add-hook 'nxml-mode-hook (lambda () (wmi 1)))
-(add-hook 'js-mode-hook   (lambda () (wmi 1)))
+    (require 'wmi)
+    (add-hook 'php-mode-hook  (lambda () (wmi 1)))
+    (add-hook 'css-mode-hook  (lambda () (wmi 1)))
+    (add-hook 'nxml-mode-hook (lambda () (wmi 1)))
+    (add-hook 'js-mode-hook   (lambda () (wmi 1)))
 
 to your .emacs
