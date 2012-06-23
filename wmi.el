@@ -26,17 +26,17 @@
 
 ;;; Debugging varables
 (defvar wmi-debug-text-reuse-calls 0)
-(defvar wmi-debugging-enabled t)
+(defvar wmi-debugging-enabled nil)
 (defvar wmi-opt:reuse-buffers t)
 (defvar wmi-opt:shorten-text t)
 (defvar wmi-opt:reuse-text t)
 
 (defmacro WMI-DEBUG (form &optional disable)
-  (if (and wmi-debugging-enabled
-           (not disable))
-      form
-      nil))
+  (unless disable form))
 
+(defmacro WMI-DEBUG (form &optional disable) nil)
+
+;;; Utility functions
 (defun wmi-replace-regexp (regexp replacement &optional from to)
   (save-excursion
     (goto-char (point-min))
