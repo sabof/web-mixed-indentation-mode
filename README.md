@@ -15,3 +15,7 @@ To use it add
     (add-hook 'js-mode-hook   (lambda () (wmi 1)))
 
 to your .emacs
+
+KNOWN BUGS:
+It doesn't work very well with <tab> indented files. 
+You need to untabify the file before using it.
