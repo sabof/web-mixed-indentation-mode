@@ -4,25 +4,34 @@
 (require 'css-mode)
 (require 'js)
 
+;;;; VARIABLES
 
-(defvar wmi-alien-js-mode 'js-mode)
-(defvar wmi-rediculous-indentation 80)
+;;; Configurable variables
+(defvar wmi-use-tabs nil)
+(defvar wmi-alien-js-mode 'js-mode
+  "Mode to use when indenting javascript")
+(defvar wmi-ridiculous-indentation 80
+  "Whenver indentations gets past this point, it is set to 0")
 
+;;; Internal variables
 (defvar wmi-original-indent-line-function 0)
+(make-variable-buffer-local 'wmi-original-indent-line-function)
 (defvar wmi-original-indent-region-function 0)
+(make-variable-buffer-local 'wmi-original-indent-region-function)
 
 (defvar wmi-inside-alien-sequence nil)
 (defvar wmi-alien-offset 0)
 (defvar wmi-character-count-difference 0)
 (defvar wmi-previous-alien-mode nil)
 
+;;; Debugging varables
 (defvar wmi-debug-economic-calls 0)
+(defvar wmi-debugging-enabled nil)
 
 (defmacro WMI-DEBUG (&rest body)
-  `(progn ,@body))
-
-(defmacro WMI-DEBUG (&rest body)
-  nil)
+  (if wmi-debugging-enabled
+      `(progn ,@body)
+      nil))
 
 (defun wmi-replace-regexp (regexp replacement &optional from to)
   (save-excursion
@@ -49,7 +58,7 @@
     (line-beginning-position)
     (line-end-position))))
 
-(defun* wmi-inside-html-tag (tag)
+(defun* wmi-inside-html-tag-p (tag)
   (let* ((start-point (point))
          (open-tag (save-excursion
                      (when (search-backward
@@ -57,7 +66,7 @@
                             (point-min) t)
                        (search-forward ">")
                        (when (< start-point (point))
-                         (return-from wmi-inside-html-tag nil))
+                         (return-from wmi-inside-html-tag-p nil))
                        (point))))
          (close-tag
           (save-excursion
@@ -83,7 +92,7 @@
   (buffer-remove-indentation)
   (indent-region (point-min) (point-max)))
 
-(defun wmi-inside-php-code ()
+(defun wmi-inside-php-code-p ()
   (flet ((search-tag-backward (tag)
            (save-excursion
              (when (and (search-backward tag (point-min) t)
@@ -98,6 +107,7 @@
            (or (not close-tag)
                (< close-tag open-tag))))))
 
+;;; Indentation sequences setups
 (defun wmi-prepare-php-sequence ()
   ;; (c-set-style "k&r")
   (save-excursion
@@ -139,7 +149,7 @@
 (defun wmi-prepare-nxml-sequence ()
   (save-excursion
     (wmi-replace-regexp "^\\(.*[^ \t\n].*\\)<\\?"
-                         "\\1  ")
+                        "\\1  ")
     (wmi-replace-regexp "\\?>\\(.*[^ \t\n].*\\)$"
                         "  \\1")
     (setq wmi-alien-offset 0)))
@@ -155,7 +165,7 @@
       (set hook-symbol old-init-hook))
     ;;
     (visual-line-mode -1)
-    ;; Set up all all indentation-related customizations here;
+    ;; Set up all all indentation-related customizations here
     (setq indent-tabs-mode nil)
     (cond ((eq mode 'nxml-mode)
            (rng-validate-mode -1))
@@ -184,9 +194,9 @@
   (when (wmi-line-matches-p "^/[/\\*]")
     (indent-line-to 1))
   (indent-according-to-mode)
-  (when (and wmi-rediculous-indentation
+  (when (and wmi-ridiculous-indentation
              (> (current-indentation)
-                wmi-rediculous-indentation))
+                wmi-ridiculous-indentation))
     (indent-line-to 0))
   (current-indentation))
 
@@ -197,79 +207,113 @@
     (- (point) (line-beginning-position))))
 
 (defun wmi-alien-indent (mode &optional limit)
-  (let* ((optimization:reuse-buffers t)
-           (optimization:reuse-text t)
-           (optimization:shorten-text t)
-           (alien-buffer-name (concat " alien-" (symbol-name mode)))
-           (old-buffer (current-buffer))
-           (old-position (point))
-           result)
-      ;; Create or switch
-      (if (and optimization:reuse-buffers
-               (get-buffer alien-buffer-name)
-               (or (not (eq mode 'c-mode))
-                   wmi-inside-alien-sequence))
-          (set-buffer alien-buffer-name)
-          (let ((default-directory "~/"))
-            (when (get-buffer alien-buffer-name)
-              (kill-buffer alien-buffer-name))
-            (set-buffer (save-window-excursion
-                          (switch-to-buffer alien-buffer-name)
-                          (current-buffer)))
-            (wmi-setup-alien mode)))
-      ;; Insert text or goto position
-      (ignore-errors
-        (if (and optimization:reuse-text
-                 wmi-inside-alien-sequence
-                 (eq wmi-previous-alien-mode mode))
-            (progn
-              (goto-char (- old-position wmi-alien-offset))
-              (WMI-DEBUG (incf wmi-debug-economic-calls)))
-            (progn
-              (delete-region (point-min) (point-max))
-              (insert (with-current-buffer old-buffer
-                        (buffer-substring-no-properties
-                         (point-min)
-                         (if (and limit
-                                  optimization:shorten-text
-                                  (not (eq mode 'c-mode)))
-                             (min limit (point-max))
-                             (point-max)))))
-              (goto-char old-position)
-              (wmi-setup-alien-indent-sequence mode)))
-        ;; Indent inside alien
-        (setq result (wmi-indent-inside-alien)))
-      ;; Set indentation
-      (when result
-        (set-buffer old-buffer)
-        (goto-char old-position)
-        (when optimization:shorten-text
-          (let ((old-indentation (wmi-current-indentation)))
-            (indent-line-to result)
-            (incf wmi-character-count-difference
-                  (- (wmi-current-indentation)
-                     old-indentation))))
-        )
-      (setq wmi-previous-alien-mode mode)
-      (WMI-DEBUG (message "Alien indent mode: %s, line: %s"
-                          mode (line-number-at-pos)))
-      ))
+  (let* (;; Try turning setting these to nil if
+         ;; you get unexpected behaviour.
+         (optimization:reuse-buffers t)
+         (optimization:reuse-text t)
+         (optimization:shorten-text t)
+         (alien-buffer-name (concat " alien-" (symbol-name mode)))
+         (old-buffer (current-buffer))
+         (old-position (point))
+         result)
+    ;; Create or switch to alien buffer
+    (if (and optimization:reuse-buffers
+             (get-buffer alien-buffer-name)
+             ;; As of emacs 24, c-mode indentation
+             ;; periodically needs restarting. I haven't
+             ;; noticed anything similar in emacs 23
+             (or (not (eq mode 'c-mode))
+                 wmi-inside-alien-sequence))
+        (set-buffer alien-buffer-name)
+        (let ((default-directory "~/"))
+          (when (get-buffer alien-buffer-name)
+            (kill-buffer alien-buffer-name))
+          (set-buffer (save-window-excursion
+                        (switch-to-buffer alien-buffer-name)
+                        (current-buffer)))
+          (wmi-setup-alien mode)))
+    ;; Insert text or goto position
+    (ignore-errors
+      (if (and optimization:reuse-text
+               wmi-inside-alien-sequence
+               (eq wmi-previous-alien-mode mode))
+          (progn
+            (goto-char (- old-position wmi-alien-offset))
+            (WMI-DEBUG (incf wmi-debug-economic-calls)))
+          (progn
+            (delete-region (point-min) (point-max))
+            (insert (with-current-buffer old-buffer
+                      (buffer-substring-no-properties
+                       (point-min)
+                       (if (and limit
+                                optimization:shorten-text
+                                (not (eq mode 'c-mode)))
+                           (min limit (point-max))
+                           (point-max)))))
+            (goto-char old-position)
+            (wmi-setup-alien-indent-sequence mode)))
+      ;; Indent inside alien
+      (setq result (wmi-indent-inside-alien)))
+    ;; Set indentation
+    (when result
+      (set-buffer old-buffer)
+      (goto-char old-position)
+      (when optimization:shorten-text
+        (let ((old-indentation (wmi-current-indentation)))
+          (indent-line-to result)
+          (incf wmi-character-count-difference
+                (- (wmi-current-indentation)
+                   old-indentation))))
+      )
+    (setq wmi-previous-alien-mode mode)
+    (WMI-DEBUG (message "Alien indent mode: %s, line: %s"
+                        mode (line-number-at-pos)))
+    ))
 
 (defun wmi-indent-line-internal (&optional limit)
   (save-excursion
     (beginning-of-line)
-    (cond
-      ((or (wmi-line-matches-p "^[ \t]*\\?>")
-           (wmi-line-matches-p "^[ \t]*<"))
-       (wmi-alien-indent 'nxml-mode limit))
-      ((wmi-inside-php-code)
-       (wmi-alien-indent 'c-mode limit))
-      ((wmi-inside-html-tag "style")
-       (wmi-alien-indent 'css-mode limit))
-      ((wmi-inside-html-tag "script")
-       (wmi-alien-indent wmi-alien-js-mode limit))
-      (t (wmi-alien-indent 'nxml-mode limit)))))
+    (let ((mode
+           (cond ((or (wmi-line-matches-p "^[ \t]*\\?>")
+                      (wmi-line-matches-p "^[ \t]*<"))
+                  'nxml-mode)
+                 ((wmi-inside-php-code-p)
+                  'c-mode)
+                 ((wmi-inside-html-tag-p "style")
+                  'css-mode)
+                 ((wmi-inside-html-tag-p "script")
+                  wmi-alien-js-mode)
+                 (t
+                  'nxml-mode))))
+      (wmi-alien-indent mode limit))))
 
+
+(defun wmi-enable-php-mixed-indentation ()
+  ;; Backups
+  (make-variable-buffer-local 'indent-region-function)
+  (unless (eq indent-line-function 'wmi-indent-line)
+    (setq wmi-original-indent-line-function indent-line-function))
+  (unless (eq indent-region-function 'wmi-indent-region)
+    (setq wmi-original-indent-region-function indent-region-function))
+  ;;
+  (setq indent-line-function    'wmi-indent-line)
+  (setq indent-region-function  'wmi-indent-region)
+  (when (fboundp 'fai-mode)
+    (setq after-change-indentation nil))
+  (setq indent-tabs-mode nil)
+  ;; Make sure all modes have been initialised
+  (flet ((wmi-enable-php-mixed-indentation ()))
+    (dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
+      (with-temp-buffer (funcall mode)))))
+
+(defun wmi-disable-php-mixed-indentation ()
+  (unless (numberp wmi-original-indent-line-function)
+    (setq indent-line-function wmi-original-indent-line-function))
+  (unless (numberp wmi-original-indent-region-function)
+    (setq indent-region-function wmi-original-indent-region-function))
+  (setq after-change-indentation t))
+
+;;; Interface
 (defun wmi-indent-line ()
   (setq wmi-character-count-difference 0)
   (wmi-indent-line-internal (line-end-position))
@@ -295,33 +339,10 @@
                      (return))
                  (setq wmi-inside-alien-sequence t)))
       (setq wmi-inside-alien-sequence nil)))
+  (when wmi-use-tabs
+    (tabify start (+ end wmi-character-count-difference)))
   (message "WMI: Indentation complete")
   )
-
-(defun wmi-enable-php-mixed-indentation ()
-  (make-variable-buffer-local 'wmi-original-indent-line-function)
-  (make-variable-buffer-local 'wmi-original-indent-region-function)
-  (make-variable-buffer-local 'indent-region-function)
-  (unless (eq indent-line-function 'wmi-indent-line)
-    (setq wmi-original-indent-line-function indent-line-function))
-  (unless (eq indent-region-function 'wmi-indent-region)
-    (setq wmi-original-indent-region-function indent-region-function))
-  (setq indent-line-function    'wmi-indent-line)
-  (setq indent-region-function  'wmi-indent-region)
-  (when (fboundp 'fai-mode)
-    (setq after-change-indentation nil))
-  (setq indent-tabs-mode nil)
-  ;; Make sure that all modes have been initialised
-  (flet ((wmi-enable-php-mixed-indentation ()))
-    (dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
-      (with-temp-buffer (funcall mode)))))
-
-(defun wmi-disable-php-mixed-indentation ()
-  (unless (numberp wmi-original-indent-line-function)
-    (setq indent-line-function wmi-original-indent-line-function))
-  (unless (numberp wmi-original-indent-region-function)
-    (setq indent-region-function wmi-original-indent-region-function))
-  (setq after-change-indentation t))
 
 (define-minor-mode web-mixed-indentation-mode ()
   :lighter " W"
