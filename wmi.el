@@ -26,7 +26,6 @@
 
 ;;; Debugging varables
 (defvar wmi-debug-text-reuse-calls 0)
-(defvar wmi-debugging-enabled nil)
 (defvar wmi-opt:reuse-buffers t)
 (defvar wmi-opt:shorten-text t)
 (defvar wmi-opt:reuse-text t)
@@ -139,26 +138,18 @@
 ;;; Indentation sequence setups
 
 (defun wmi-prepare-php-sequence ()
-  (flet ((l:delete-first-comment-end-maybe ()
-           (goto-char (point-min))
-           (let ((first-open (save-excursion
-                               (when (search-forward "/*" nil t)
-                                 (point))))
-                 (first-closed (save-excursion
-                                 (when (search-forward "*/" nil t)
-                                   (point)))))
-             (when (or (and first-closed
-                            (not first-open))
-                       (and first-closed first-open
-                            (< first-closed first-open)))
-               (wmi-replace-regexp "." " "
-                                   (point-min) first-closed)))))
-    (save-excursion
-      (wmi-replace "<?php" "   */")
-      (wmi-replace "<?" "*/")
-      (wmi-replace "?>" "/*")
-      (l:delete-first-comment-end-maybe)
-      (setq wmi-alien-offset 0))))
+  (save-excursion
+    ;; Remove first <?
+    (goto-char (point-min))
+    (search-forward "<?")
+    (when (looking-at "php")
+      (forward-char 3))
+    ;;
+    (wmi-replace-regexp "." " " (point-min) (point))
+    (wmi-replace "<?php" "   */")
+    (wmi-replace "<?" "*/")
+    (wmi-replace "?>" "/*")
+    (setq wmi-alien-offset 0)))
 
 (defun wmi-prepare-javascript-sequence ()
   (let ((start (point)))
@@ -308,7 +299,7 @@
                                          (current-indentation)))))
                     (if php-opening
                         (progn
-                          (indent-line-to php-opening)
+                          (indent-line-to (+ 2 php-opening))
                           (setq wmi-previous-alien-mode nil)
                           nil)
                         'nxml-mode)))
