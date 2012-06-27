@@ -1,3 +1,7 @@
+;;;;
+;;;; WEB MIXED INDENTATION MINOR MODE
+;;;;
+
 (require 'cl)
 (require 'cc-mode)
 (require 'nxml-mode)
@@ -7,11 +11,23 @@
 ;;;; VARIABLES
 
 ;;; Configurable variables
-(defvar wmi-use-tabs nil)
 (defvar wmi-alien-js-mode 'js-mode
   "Mode to use when indenting javascript")
 (defvar wmi-ridiculous-indentation 80
   "Whenver indentations gets past this point, delete all indentation")
+(defvar wmi-mode-customization-function nil
+  "A hook run instead of standard hooks, for major modes used for indentation.
+It takes one argument, the symbol of the mode which is going to be used.
+PHP code is indented using c-mode, so this mode gets passed as argument.
+
+Example setup:
+ (add-hook 'wmi-mode-customization-function
+           (lambda (mode)
+             (case mode
+               (c-mode (foo))
+               (js-mode (foo))
+               (css-mode (foo))
+               (nxml-mode (foo)))))")
 
 ;;; Internal variables
 (defvar wmi-original-indent-line-function 0)
@@ -105,7 +121,7 @@
                (point)))))
     (let ((open-tag (l:search-tag-backward "<?"))
           (close-tag (l:search-tag-backward "?>")))
-      ;; (message "open: %s close: %s" open-tag close-tag)
+      (WMI-DEBUG (message "open: %s close: %s" open-tag close-tag))
       (and open-tag
            (or (not close-tag)
                (< close-tag open-tag))))))
@@ -121,19 +137,12 @@
       (set hook-symbol old-init-hook))
     ;;
     (visual-line-mode -1)
-    ;; All per-mode indentation-related
-    ;; customizations go here
-    (setq indent-tabs-mode nil)
-    (cond ((eq mode 'nxml-mode)
-           (rng-validate-mode -1))
-          ((eq mode 'c-mode)
-           (when (fboundp 'ywb-php-lineup-arglist-intro)
-             (c-set-offset 'arglist-intro 'ywb-php-lineup-arglist-intro))
-           (when (fboundp 'ywb-php-lineup-arglist-close)
-             (c-set-offset 'arglist-close 'ywb-php-lineup-arglist-close))))
-
-    (font-lock-mode -1))
-  (setq buffer-offer-save nil))
+    (when (eq mode 'nxml-mode)
+      (rng-validate-mode -1))
+    (font-lock-mode -1)
+    (setq buffer-offer-save nil)
+    (run-hook-with-args 'wmi-mode-customization-function mode)
+    ))
 
 ;;; Indentation sequence setups
 
@@ -176,18 +185,15 @@
     (setq wmi-alien-offset 0)))
 
 (defun wmi-setup-alien-indent-sequence (mode)
-  (cond ((eq mode 'c-mode)
-         (wmi-prepare-php-sequence))
-        ((eq mode 'css-mode)
-         (wmi-prepare-css-sequence))
-        ((eq mode 'nxml-mode)
-         (wmi-prepare-nxml-sequence))
-        ((eq mode wmi-alien-js-mode)
-         (wmi-prepare-javascript-sequence))
-        (t (setq wmi-alien-offset 0))))
+  (case mode
+    (c-mode    (wmi-prepare-php-sequence))
+    (css-mode  (wmi-prepare-css-sequence))
+    (nxml-mode (wmi-prepare-nxml-sequence))
+    (t (if (eq mode wmi-alien-js-mode)
+           (wmi-prepare-javascript-sequence)
+           (setq wmi-alien-offset 0)))))
 
 (defun wmi-indent-inside-alien ()
-  ;; (indent-line-to 0)
   (when (wmi-line-matches-p "^/[/\\*]")
     (indent-line-to 1))
   (indent-according-to-mode)
@@ -213,7 +219,7 @@
                   (current-buffer)))
     (wmi-setup-alien mode)))
 
-(defun wmi-secure-buffer (mode)
+(defun wmi-secure-alien (mode)
   (let* ((alien-buffer-name (concat " alien-" (symbol-name mode)))
          (reuse-buffer
           (and wmi-opt:reuse-buffers
@@ -270,7 +276,7 @@
                        (goto-char old-position)
                        (wmi-setup-alien-indent-sequence mode)))))
         (condition-case error-message
-            (progn (wmi-secure-buffer mode)
+            (progn (wmi-secure-alien mode)
                    (l:setup-buffer)
                    (condition-case error-message2
                        (setq result (wmi-indent-inside-alien))
@@ -295,7 +301,8 @@
     (let ((mode
            (cond ((wmi-line-matches-p "^[ \t]*\\?>")
                   (let ((php-opening (save-excursion
-                                       (when (re-search-backward "^[ \t]*<\\?" nil t)
+                                       (when (re-search-backward "^[ \t]*<\\?"
+                                                                 nil t)
                                          (current-indentation)))))
                     (if php-opening
                         (progn
@@ -328,7 +335,6 @@
   (setq indent-region-function  'wmi-indent-region)
   (when (fboundp 'fai-mode)
     (setq after-change-indentation nil))
-  (setq indent-tabs-mode nil)
   ;; Make sure all modes have been initialised
   (flet ((wmi-enable-php-mixed-indentation ()))
     (dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
@@ -367,12 +373,23 @@
                      (return))
                  (setq wmi-inside-alien-sequence t)))
       (setq wmi-inside-alien-sequence nil)))
-  (when wmi-use-tabs
-    (tabify start (+ end wmi-character-count-difference)))
   (message "WMI: Indentation complete")
   )
 
-(define-minor-mode web-mixed-indentation-mode ()
+(define-minor-mode web-mixed-indentation-mode
+    "A minor mode for indentation of files containing PHP, XHTML, CSS and JavaScript code. Being a minor mode, it can be used in conjunction with any major mode.It works by overriding the indentation function, figuring out the language, removing all the confusing text and indenting according to an appropriate major mode.
+
+For reasons of efficency, modes providing indentation are initialized without running the standard hooks. However, a special hook is provided called wmi-mode-customization-function. You can read this varable's documentation to find out more.
+
+The project is hosted at
+http://github.com/sabof/web-mixed-indentation-mode
+
+Example usage:
+(require 'wmi)
+(add-hook 'php-mode-hook  (lambda () (wmi 1)))
+(add-hook 'css-mode-hook  (lambda () (wmi 1)))
+(add-hook 'nxml-mode-hook (lambda () (wmi 1)))
+(add-hook 'js-mode-hook   (lambda () (wmi 1)))"
   :lighter " W"
   (if web-mixed-indentation-mode
       (wmi-enable-php-mixed-indentation)
