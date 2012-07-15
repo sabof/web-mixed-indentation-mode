@@ -46,10 +46,16 @@ Example setup:
 (defvar wmi-opt:shorten-text t)
 (defvar wmi-opt:reuse-text t)
 
-(defmacro WMI-DEBUG (form &optional disable)
-  (unless disable form))
-
 (defmacro WMI-DEBUG (form &optional disable) nil)
+
+(defun wmi-debugging-enable ()
+  (defmacro WMI-DEBUG (form &optional disable)
+    (unless disable form))
+  (load load-file-name))
+
+(defun wmi-debugging-disable ()
+  (defmacro WMI-DEBUG (form &optional disable) nil)
+  (load load-file-name))
 
 ;;; Utility functions
 (defun wmi-replace-regexp (regexp replacement &optional from to)
@@ -76,6 +82,14 @@ Example setup:
    (buffer-substring
     (line-beginning-position)
     (line-end-position))))
+
+(defun wmi-current-indentation ()
+  "Like (current-indentation), but counts tabs as single characters"
+  (save-excursion
+    (back-to-indentation)
+    (- (point) (line-beginning-position))))
+
+;;;
 
 (defun* wmi-inside-html-tag-p (tag)
   (let* ((start-point (point))
@@ -153,8 +167,8 @@ Example setup:
     (search-forward "<?")
     (when (looking-at "php")
       (forward-char 3))
-    ;;
     (wmi-replace-regexp "." " " (point-min) (point))
+    ;;
     (wmi-replace "<?php" "   */")
     (wmi-replace "<?" "*/")
     (wmi-replace "?>" "/*")
@@ -184,6 +198,8 @@ Example setup:
                         "  \\1")
     (setq wmi-alien-offset 0)))
 
+;;;
+
 (defun wmi-setup-alien-indent-sequence (mode)
   (case mode
     (c-mode    (wmi-prepare-php-sequence))
@@ -202,12 +218,6 @@ Example setup:
                 wmi-ridiculous-indentation))
     (indent-line-to 0))
   (current-indentation))
-
-(defun wmi-current-indentation ()
-  "Like (current-indentation), but counts <tabs> as single characters"
-  (save-excursion
-    (back-to-indentation)
-    (- (point) (line-beginning-position))))
 
 (defun wmi-create-alien (mode)
   (let ((alien-buffer-name (concat " alien-" (symbol-name mode)))
@@ -275,6 +285,7 @@ Example setup:
                        (insert (wmi-get-old-string old-buffer mode limit))
                        (goto-char old-position)
                        (wmi-setup-alien-indent-sequence mode)))))
+        ;; When there is an error, create a new buffer and try again
         (condition-case error-message
             (progn (wmi-secure-alien mode)
                    (l:setup-buffer)
@@ -283,7 +294,7 @@ Example setup:
                      (error (wmi-create-alien mode)
                             (l:setup-buffer)
                             (setq result (wmi-indent-inside-alien)))))
-          (error (WMI-DEBUG (message "%s" error-message))))
+          (error (WMI-DEBUG (error "%s" error-message))))
         (when result
           (set-buffer old-buffer)
           (goto-char old-position)
@@ -306,7 +317,7 @@ Example setup:
                                          (current-indentation)))))
                     (if php-opening
                         (progn
-                          (indent-line-to (+ 2 php-opening))
+                          (indent-line-to (+ 0 php-opening))
                           (setq wmi-previous-alien-mode nil)
                           nil)
                         'nxml-mode)))
@@ -323,7 +334,8 @@ Example setup:
       (when mode
         (wmi-alien-indent mode limit)))))
 
-(defun wmi-enable-php-mixed-indentation ()
+(defun wmi-enable ()
+  "If you want to enable to enable wmi, write (wmi 1)"
   ;; Backups
   (make-variable-buffer-local 'indent-region-function)
   (unless (eq indent-line-function 'wmi-indent-line)
@@ -336,11 +348,12 @@ Example setup:
   (when (fboundp 'fai-mode)
     (setq after-change-indentation nil))
   ;; Make sure all modes have been initialised
-  (flet ((wmi-enable-php-mixed-indentation ()))
+  (flet ((wmi-enable ()))
     (dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
       (with-temp-buffer (funcall mode)))))
 
-(defun wmi-disable-php-mixed-indentation ()
+(defun wmi-disable ()
+  "If you want to diable to enable wmi, write (wmi -1)"
   (unless (numberp wmi-original-indent-line-function)
     (setq indent-line-function wmi-original-indent-line-function))
   (unless (numberp wmi-original-indent-region-function)
@@ -392,8 +405,8 @@ Example usage:
 (add-hook 'js-mode-hook   (lambda () (wmi 1)))"
   :lighter " W"
   (if web-mixed-indentation-mode
-      (wmi-enable-php-mixed-indentation)
-      (wmi-disable-php-mixed-indentation)))
+      (wmi-enable)
+      (wmi-disable)))
 
 (defalias 'wmi 'web-mixed-indentation-mode)
 (defvaralias 'wmi 'web-mixed-indentation-mode)
