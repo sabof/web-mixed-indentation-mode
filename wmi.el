@@ -141,22 +141,23 @@ Example setup:
                (< close-tag open-tag))))))
 
 (defun wmi-setup-alien (mode)
-  (let* ((hook-symbol (intern (concat (symbol-name mode) "-hook")))
-         (old-init-hook (when (boundp hook-symbol)
-                          (symbol-value hook-symbol))))
-    (when old-init-hook
-      (set hook-symbol nil))
-    (funcall mode)
-    (when old-init-hook
-      (set hook-symbol old-init-hook))
-    ;;
-    (visual-line-mode -1)
-    (when (eq mode 'nxml-mode)
-      (rng-validate-mode -1))
-    (font-lock-mode -1)
-    (setq buffer-offer-save nil)
-    (run-hook-with-args 'wmi-mode-customization-function mode)
-    ))
+  (flet ((message (&rest ignore)))
+    (let* ((hook-symbol (intern (concat (symbol-name mode) "-hook")))
+           (old-init-hook (when (boundp hook-symbol)
+                            (symbol-value hook-symbol))))
+      (when old-init-hook
+        (set hook-symbol nil))
+      (funcall mode)
+      (when old-init-hook
+        (set hook-symbol old-init-hook))
+      ;;
+      (visual-line-mode -1)
+      (when (eq mode 'nxml-mode)
+        (rng-validate-mode -1))
+      (font-lock-mode -1)
+      (setq buffer-offer-save nil)
+      (run-hook-with-args 'wmi-mode-customization-function mode)
+      )))
 
 ;;; Indentation sequence setups
 
@@ -281,7 +282,7 @@ Example setup:
                        (WMI-DEBUG (message "text-reuse"))
                        (WMI-DEBUG (incf wmi-debug-text-reuse-calls)))
                      (progn
-                       (delete-region (point-min) (point-max))
+                       (erase-buffer)
                        (insert (wmi-get-old-string old-buffer mode limit))
                        (goto-char old-position)
                        (wmi-setup-alien-indent-sequence mode)))))
@@ -348,7 +349,8 @@ Example setup:
   (when (fboundp 'fai-mode)
     (setq after-change-indentation nil))
   ;; Make sure all modes have been initialised
-  (flet ((wmi-enable ()))
+  (flet ((wmi-enable ())
+         (message (&rest ignore)))
     (dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
       (with-temp-buffer (funcall mode)))))
 
