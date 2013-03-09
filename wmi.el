@@ -346,8 +346,9 @@ Example setup:
   ;;
   (setq indent-line-function    'wmi-indent-line)
   (setq indent-region-function  'wmi-indent-region)
-  (when (fboundp 'fai-mode)
-    (setq after-change-indentation nil))
+  (when (fboundp 'es-aai-mode)
+    (set (make-local-variable
+          'es-aai-after-change-indentation) nil))
   ;; Make sure all modes have been initialised
   (flet ((wmi-enable ())
          (message (&rest ignore)))
@@ -360,36 +361,41 @@ Example setup:
     (setq indent-line-function wmi-original-indent-line-function))
   (unless (numberp wmi-original-indent-region-function)
     (setq indent-region-function wmi-original-indent-region-function))
-  (setq after-change-indentation t))
+  (when (fboundp 'es-aai-mode)
+    (set (make-local-variable
+          'es-aai-after-change-indentation) t)))
 
 ;;; Interface
 (defun wmi-indent-line ()
-  (setq wmi-character-count-difference 0)
-  (wmi-indent-line-internal (line-end-position))
-  (goto-char (max (save-excursion (back-to-indentation)
-                                  (point))
-                  (point)))
-  (setq deactivate-mark nil
-        cua--explicit-region-start nil))
+  (save-restriction
+    (widen)
+    (setq wmi-character-count-difference 0)
+    (wmi-indent-line-internal (line-end-position))
+    (goto-char (max (save-excursion (back-to-indentation)
+                                    (point))
+                    (point)))
+    (setq deactivate-mark nil
+          cua--explicit-region-start nil)))
 
 (defun wmi-indent-region (start end)
-  (setq wmi-character-count-difference 0)
-  (WMI-DEBUG (setq wmi-debug-text-reuse-calls 0))
-  (let ((first-time t)
-        (last-line (line-number-at-pos end)))
-    (unwind-protect
-         (save-excursion
-           (goto-char start)
-           (loop (if (and (<= (line-number-at-pos) last-line)
-                          (not (= (point) (point-max))))
-                     (progn (wmi-indent-line-internal
-                             (+ end wmi-character-count-difference))
-                            (forward-line))
-                     (return))
-                 (setq wmi-inside-alien-sequence t)))
-      (setq wmi-inside-alien-sequence nil)))
-  (message "WMI: Indentation complete")
-  )
+  (save-restriction
+    (widen)
+    (setq wmi-character-count-difference 0)
+    (WMI-DEBUG (setq wmi-debug-text-reuse-calls 0))
+    (let ((first-time t)
+          (last-line (line-number-at-pos end)))
+      (unwind-protect
+           (save-excursion
+             (goto-char start)
+             (loop (if (and (<= (line-number-at-pos) last-line)
+                            (not (= (point) (point-max))))
+                       (progn (wmi-indent-line-internal
+                               (+ end wmi-character-count-difference))
+                              (forward-line))
+                       (return))
+                   (setq wmi-inside-alien-sequence t)))
+        (setq wmi-inside-alien-sequence nil)))
+    (message "WMI: Indentation complete")))
 
 (define-minor-mode web-mixed-indentation-mode
     "A minor mode for indentation of files containing PHP, XHTML, CSS and JavaScript code. Being a minor mode, it can be used in conjunction with any major mode.It works by overriding the indentation function, figuring out the language, removing all the confusing text and indenting according to an appropriate major mode.
