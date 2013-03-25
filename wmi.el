@@ -268,43 +268,44 @@ Example setup:
 
 (defun wmi-alien-indent (mode &optional limit)
   (WMI-DEBUG (message "alien indent"))
-  (let* ((old-buffer (current-buffer))
-         (old-position (point))
+  (let* (( old-buffer (current-buffer))
+         ( old-position (point))
+         ( l:setup-buffer
+           (lambda ()
+             (if (and wmi-opt:reuse-text
+                      wmi-inside-alien-sequence
+                      (eq wmi-previous-alien-mode mode))
+                 (progn
+                   (forward-line)
+                   (WMI-DEBUG (message "text-reuse"))
+                   (WMI-DEBUG (incf wmi-debug-text-reuse-calls)))
+                 (progn
+                   (erase-buffer)
+                   (insert (wmi-get-old-string old-buffer mode limit))
+                   (goto-char old-position)
+                   (wmi-setup-alien-indent-sequence mode)))))
          result)
     (flet ((c-before-change (&rest rest))
            (c-after-change (&rest rest)))
-      (labels ((l:setup-buffer ()
-                 (if (and wmi-opt:reuse-text
-                          wmi-inside-alien-sequence
-                          (eq wmi-previous-alien-mode mode))
-                     (progn
-                       (forward-line)
-                       (WMI-DEBUG (message "text-reuse"))
-                       (WMI-DEBUG (incf wmi-debug-text-reuse-calls)))
-                     (progn
-                       (erase-buffer)
-                       (insert (wmi-get-old-string old-buffer mode limit))
-                       (goto-char old-position)
-                       (wmi-setup-alien-indent-sequence mode)))))
-        ;; When there is an error, create a new buffer and try again
-        (condition-case error-message
-            (progn (wmi-secure-alien mode)
-                   (l:setup-buffer)
-                   (condition-case error-message2
-                       (setq result (wmi-indent-inside-alien))
-                     (error (wmi-create-alien mode)
-                            (l:setup-buffer)
-                            (setq result (wmi-indent-inside-alien)))))
-          (error (WMI-DEBUG (error "%s" error-message))))
-        (when result
-          (set-buffer old-buffer)
-          (goto-char old-position)
-          (wmi-indent-inside-source result))
-        (setq wmi-previous-alien-mode mode)
-        (WMI-DEBUG (message "Alien indent mode: %s, line: %s"
-                            mode (line-number-at-pos))
-                   ;; 'DISABLED
-                   )))
+      ;; When there is an error, create a new buffer and try again
+      (condition-case error-message
+          (progn (wmi-secure-alien mode)
+                 (funcall l:setup-buffer)
+                 (condition-case error-message2
+                     (setq result (wmi-indent-inside-alien))
+                   (error (wmi-create-alien mode)
+                          (funcall l:setup-buffer)
+                          (setq result (wmi-indent-inside-alien)))))
+        (error (WMI-DEBUG (error "%s" error-message))))
+      (when result
+        (set-buffer old-buffer)
+        (goto-char old-position)
+        (wmi-indent-inside-source result))
+      (setq wmi-previous-alien-mode mode)
+      (WMI-DEBUG (message "Alien indent mode: %s, line: %s"
+                          mode (line-number-at-pos))
+                 ;; 'DISABLED
+                 ))
     ))
 
 (defun wmi-indent-line-internal (&optional limit)
@@ -352,7 +353,7 @@ Example setup:
   ;; Make sure all modes have been initialised
   (flet ((wmi-enable ())
          (message (&rest ignore)))
-    (dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
+    (cl-dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
       (with-temp-buffer (funcall mode)))))
 
 (defun wmi-disable ()
@@ -406,11 +407,11 @@ The project is hosted at
 http://github.com/sabof/web-mixed-indentation-mode
 
 Example usage:
-(require 'wmi)
-(add-hook 'php-mode-hook  (lambda () (wmi 1)))
-(add-hook 'css-mode-hook  (lambda () (wmi 1)))
-(add-hook 'nxml-mode-hook (lambda () (wmi 1)))
-(add-hook 'js-mode-hook   (lambda () (wmi 1)))"
+\(require 'wmi)
+\(add-hook 'php-mode-hook  (lambda () (wmi 1)))
+\(add-hook 'css-mode-hook  (lambda () (wmi 1)))
+\(add-hook 'nxml-mode-hook (lambda () (wmi 1)))
+\(add-hook 'js-mode-hook   (lambda () (wmi 1)))"
   :lighter " W"
   (if web-mixed-indentation-mode
       (wmi-enable)
@@ -418,5 +419,8 @@ Example usage:
 
 (defalias 'wmi 'web-mixed-indentation-mode)
 (defvaralias 'wmi 'web-mixed-indentation-mode)
+
+(defalias 'wmi-mode 'web-mixed-indentation-mode)
+(defvaralias 'wmi-mode 'web-mixed-indentation-mode)
 
 (provide 'wmi)
