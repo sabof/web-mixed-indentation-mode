@@ -225,9 +225,7 @@ Example setup:
         (default-directory "~/"))
     (when (get-buffer alien-buffer-name)
       (kill-buffer alien-buffer-name))
-    (set-buffer (save-window-excursion
-                  (switch-to-buffer alien-buffer-name)
-                  (current-buffer)))
+    (set-buffer (get-buffer-create alien-buffer-name))
     (wmi-setup-alien mode)))
 
 (defun wmi-secure-alien (mode)
@@ -311,28 +309,30 @@ Example setup:
 (defun wmi-indent-line-internal (&optional limit)
   (save-excursion
     (beginning-of-line)
-    (let ((mode
-           (cond ((wmi-line-matches-p "^[ \t]*\\?>")
-                  (let ((php-opening (save-excursion
-                                       (when (re-search-backward "^[ \t]*<\\?"
-                                                                 nil t)
-                                         (current-indentation)))))
-                    (if php-opening
-                        (progn
-                          (indent-line-to (+ 0 php-opening))
-                          (setq wmi-previous-alien-mode nil)
-                          nil)
-                        'nxml-mode)))
-                 ((wmi-line-matches-p "^[ \t]*<")
-                  'nxml-mode)
-                 ((wmi-inside-php-code-p)
-                  'c-mode)
-                 ((wmi-inside-html-tag-p "style")
-                  'css-mode)
-                 ((wmi-inside-html-tag-p "script")
-                  wmi-alien-js-mode)
-                 (t
-                  'nxml-mode))))
+    (let* ((window-configuration-change-hook
+            (remove 'git-gutter window-configuration-change-hook))
+           (mode
+            (cond ( (wmi-line-matches-p "^[ \t]*\\?>")
+                    (let (( php-opening
+                            (save-excursion
+                              (when (re-search-backward "^[ \t]*<\\?"
+                                                        nil t)
+                                (current-indentation)))))
+                      (if php-opening
+                          (progn
+                            (indent-line-to (+ 0 php-opening))
+                            (setq wmi-previous-alien-mode nil)
+                            nil)
+                          'nxml-mode)))
+                  ( (wmi-line-matches-p "^[ \t]*<")
+                    'nxml-mode)
+                  ( (wmi-inside-php-code-p)
+                    'c-mode)
+                  ( (wmi-inside-html-tag-p "style")
+                    'css-mode)
+                  ( (wmi-inside-html-tag-p "script")
+                    wmi-alien-js-mode)
+                  ( t 'nxml-mode))))
       (when mode
         (wmi-alien-indent mode limit)))))
 
