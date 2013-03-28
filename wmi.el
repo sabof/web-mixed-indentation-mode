@@ -424,3 +424,4 @@ Example usage:
 (defvaralias 'wmi-mode 'web-mixed-indentation-mode)
 
 (provide 'wmi)
+;;; wmi.el ends here
