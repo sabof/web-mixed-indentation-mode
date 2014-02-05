@@ -337,7 +337,7 @@ Example setup:
         (wmi-alien-indent mode limit)))))
 
 (defun wmi-enable ()
-  "If you want to enable to enable wmi, write (wmi 1)"
+  "If you want to enable to enable wmi, write (wmi-mode 1)"
   ;; Backups
   (make-variable-buffer-local 'indent-region-function)
   (unless (eq indent-line-function 'wmi-indent-line)
@@ -347,9 +347,9 @@ Example setup:
   ;;
   (setq indent-line-function    'wmi-indent-line)
   (setq indent-region-function  'wmi-indent-region)
-  (when (fboundp 'es-aai-mode)
+  (when (fboundp 'aai-mode)
     (set (make-local-variable
-          'es-aai-after-change-indentation) nil))
+          'aai-after-change-indentation) nil))
   ;; Make sure all modes have been initialised
   (flet ((wmi-enable ())
          (message (&rest ignore)))
@@ -362,9 +362,9 @@ Example setup:
     (setq indent-line-function wmi-original-indent-line-function))
   (unless (numberp wmi-original-indent-region-function)
     (setq indent-region-function wmi-original-indent-region-function))
-  (when (fboundp 'es-aai-mode)
+  (when (fboundp 'aai-mode)
     (set (make-local-variable
-          'es-aai-after-change-indentation) t)))
+          'aai-after-change-indentation) t)))
 
 ;;; Interface
 (defun wmi-indent-line ()
@@ -399,26 +399,30 @@ Example setup:
     (message "WMI: Indentation complete")))
 
 (define-minor-mode web-mixed-indentation-mode
-    "A minor mode for indentation of files containing PHP, XHTML, CSS and JavaScript code. Being a minor mode, it can be used in conjunction with any major mode.It works by overriding the indentation function, figuring out the language, removing all the confusing text and indenting according to an appropriate major mode.
+    "A minor mode for indentation of files containing PHP, XHTML, CSS and
+ JavaScript code. Being a minor mode, it can be used in conjunction with any
+ major mode.It works by overriding the indentation function, figuring out the
+ language, removing all the confusing text and indenting according to an
+ appropriate major mode.
 
-For reasons of efficency, modes providing indentation are initialized without running the standard hooks. However, a special hook is provided called wmi-mode-customization-function. You can read this varable's documentation to find out more.
+For reasons of efficency, modes providing indentation are initialized without
+ running the standard hooks. However, a special hook is provided called
+ wmi-mode-customization-function. You can read this varable's documentation to
+ find out more.
 
 The project is hosted at
 http://github.com/sabof/web-mixed-indentation-mode
 
 Example usage:
 \(require 'wmi)
-\(add-hook 'php-mode-hook  (lambda () (wmi 1)))
-\(add-hook 'css-mode-hook  (lambda () (wmi 1)))
-\(add-hook 'nxml-mode-hook (lambda () (wmi 1)))
-\(add-hook 'js-mode-hook   (lambda () (wmi 1)))"
+\(add-hook 'php-mode-hook  (lambda () (wmi-mode 1)))
+\(add-hook 'css-mode-hook  (lambda () (wmi-mode 1)))
+\(add-hook 'nxml-mode-hook (lambda () (wmi-mode 1)))
+\(add-hook 'js-mode-hook   (lambda () (wmi-mode 1)))"
   :lighter " W"
   (if web-mixed-indentation-mode
       (wmi-enable)
       (wmi-disable)))
-
-(defalias 'wmi 'web-mixed-indentation-mode)
-(defvaralias 'wmi 'web-mixed-indentation-mode)
 
 (defalias 'wmi-mode 'web-mixed-indentation-mode)
 (defvaralias 'wmi-mode 'web-mixed-indentation-mode)
