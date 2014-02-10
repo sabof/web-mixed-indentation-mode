@@ -2,7 +2,8 @@
 ;;;; WEB MIXED INDENTATION MINOR MODE
 ;;;;
 
-(require 'cl)
+(require 'cl) ; I'm probably still using it
+(require 'cl-lib)
 (require 'cc-mode)
 (require 'nxml-mode)
 (require 'css-mode)
@@ -30,10 +31,8 @@ Example setup:
                (nxml-mode (foo)))))")
 
 ;;; Internal variables
-(defvar wmi-original-indent-line-function 0)
-(make-variable-buffer-local 'wmi-original-indent-line-function)
-(defvar wmi-original-indent-region-function 0)
-(make-variable-buffer-local 'wmi-original-indent-region-function)
+(defvar-local wmi-original-indent-line-function 0)
+(defvar-local wmi-original-indent-region-function 0)
 
 (defvar wmi-inside-alien-sequence nil)
 (defvar wmi-alien-offset 0)
@@ -89,9 +88,7 @@ Example setup:
     (back-to-indentation)
     (- (point) (line-beginning-position))))
 
-;;;
-
-(defun* wmi-inside-html-tag-p (tag)
+(cl-defun wmi-inside-html-tag-p (tag)
   (let* ((start-point (point))
          (open-tag (save-excursion
                      (when (search-backward
@@ -126,13 +123,13 @@ Example setup:
   (indent-region (point-min) (point-max)))
 
 (defun wmi-inside-php-code-p ()
-  (flet ((l:search-tag-backward (tag)
-           (save-excursion
-             (when (and (search-backward tag (point-min) t)
-                        (not (memq (face-at-point)
-                                   '(font-lock-comment-face
-                                     font-lock-string-face))))
-               (point)))))
+  (cl-labels (( l:search-tag-backward (tag)
+                (save-excursion
+                  (when (and (search-backward tag (point-min) t)
+                             (not (memq (face-at-point)
+                                        '(font-lock-comment-face
+                                          font-lock-string-face))))
+                    (point)))))
     (let ((open-tag (l:search-tag-backward "<?"))
           (close-tag (l:search-tag-backward "?>")))
       (WMI-DEBUG (message "open: %s close: %s" open-tag close-tag))
@@ -141,10 +138,11 @@ Example setup:
                (< close-tag open-tag))))))
 
 (defun wmi-setup-alien (mode)
-  (flet ((message (&rest ignore)))
-    (let* ((hook-symbol (intern (concat (symbol-name mode) "-hook")))
-           (old-init-hook (when (boundp hook-symbol)
-                            (symbol-value hook-symbol))))
+  (cl-letf  (( (symbol-function 'message)
+               (symbol-function 'ignore)))
+    (let* (( hook-symbol (intern (concat (symbol-name mode) "-hook")))
+           ( old-init-hook (when (boundp hook-symbol)
+                             (symbol-value hook-symbol))))
       (when old-init-hook
         (set hook-symbol nil))
       (funcall mode)
@@ -202,13 +200,13 @@ Example setup:
 ;;;
 
 (defun wmi-setup-alien-indent-sequence (mode)
-  (case mode
+  (cl-case mode
     (c-mode    (wmi-prepare-php-sequence))
     (css-mode  (wmi-prepare-css-sequence))
     (nxml-mode (wmi-prepare-nxml-sequence))
     (t (if (eq mode wmi-alien-js-mode)
            (wmi-prepare-javascript-sequence)
-           (setq wmi-alien-offset 0)))))
+         (setq wmi-alien-offset 0)))))
 
 (defun wmi-indent-inside-alien ()
   (when (wmi-line-matches-p "^/[/\\*]")
@@ -240,15 +238,15 @@ Example setup:
                    wmi-inside-alien-sequence))))
     (if reuse-buffer
         (set-buffer alien-buffer-name)
-        (wmi-create-alien mode))))
+      (wmi-create-alien mode))))
 
 (defun wmi-indent-inside-source (result)
   (when wmi-opt:shorten-text
     (let ((old-indentation (wmi-current-indentation)))
       (indent-line-to result)
-      (incf wmi-character-count-difference
-            (- (wmi-current-indentation)
-               old-indentation))))
+      (cl-incf wmi-character-count-difference
+               (- (wmi-current-indentation)
+                  old-indentation))))
   (unless wmi-opt:shorten-text
     (indent-line-to result)))
 
@@ -259,7 +257,7 @@ Example setup:
                         limit
                         (not (eq mode 'c-mode)))
                    (min limit (point-max))
-                   (point-max))))
+                 (point-max))))
       (WMI-DEBUG (assert (or (not limit) (<= limit (point-max)))))
       (WMI-DEBUG (message "max: %s" max))
       (buffer-substring-no-properties (point-min) max))))
@@ -276,15 +274,17 @@ Example setup:
                  (progn
                    (forward-line)
                    (WMI-DEBUG (message "text-reuse"))
-                   (WMI-DEBUG (incf wmi-debug-text-reuse-calls)))
-                 (progn
-                   (erase-buffer)
-                   (insert (wmi-get-old-string old-buffer mode limit))
-                   (goto-char old-position)
-                   (wmi-setup-alien-indent-sequence mode)))))
+                   (WMI-DEBUG (cl-incf wmi-debug-text-reuse-calls)))
+               (progn
+                 (erase-buffer)
+                 (insert (wmi-get-old-string old-buffer mode limit))
+                 (goto-char old-position)
+                 (wmi-setup-alien-indent-sequence mode)))))
          result)
-    (flet ((c-before-change (&rest rest))
-           (c-after-change (&rest rest)))
+    (cl-letf (( (symbol-function 'c-before-change)
+                (symbol-function 'ignore))
+              ( (symbol-function 'c-after-change)
+                (symbol-function 'ignore)))
       ;; When there is an error, create a new buffer and try again
       (condition-case error-message
           (progn (wmi-secure-alien mode)
@@ -323,7 +323,7 @@ Example setup:
                             (indent-line-to (+ 0 php-opening))
                             (setq wmi-previous-alien-mode nil)
                             nil)
-                          'nxml-mode)))
+                        'nxml-mode)))
                   ( (wmi-line-matches-p "^[ \t]*<")
                     'nxml-mode)
                   ( (wmi-inside-php-code-p)
@@ -339,20 +339,20 @@ Example setup:
 (defun wmi-enable ()
   "If you want to enable to enable wmi, write (wmi-mode 1)"
   ;; Backups
-  (make-variable-buffer-local 'indent-region-function)
   (unless (eq indent-line-function 'wmi-indent-line)
     (setq wmi-original-indent-line-function indent-line-function))
   (unless (eq indent-region-function 'wmi-indent-region)
     (setq wmi-original-indent-region-function indent-region-function))
   ;;
   (setq indent-line-function    'wmi-indent-line)
-  (setq indent-region-function  'wmi-indent-region)
+  (setq-local indent-region-function  'wmi-indent-region)
   (when (fboundp 'aai-mode)
-    (set (make-local-variable
-          'aai-after-change-indentation) nil))
+    (setq-local aai-after-change-indentation nil))
   ;; Make sure all modes have been initialised
-  (flet ((wmi-enable ())
-         (message (&rest ignore)))
+  (cl-letf (( (symbol-function 'wmi-enable)
+              (symbol-function 'ignore))
+            ( (symbol-function 'message)
+              (symbol-function 'ignore)))
     (cl-dolist (mode (list 'c-mode wmi-alien-js-mode 'css-mode 'nxml-mode))
       (with-temp-buffer (funcall mode)))))
 
@@ -361,10 +361,9 @@ Example setup:
   (unless (numberp wmi-original-indent-line-function)
     (setq indent-line-function wmi-original-indent-line-function))
   (unless (numberp wmi-original-indent-region-function)
-    (setq indent-region-function wmi-original-indent-region-function))
+    (setq-local indent-region-function wmi-original-indent-region-function))
   (when (fboundp 'aai-mode)
-    (set (make-local-variable
-          'aai-after-change-indentation) t)))
+    (setq-local aai-after-change-indentation t)))
 
 ;;; Interface
 (defun wmi-indent-line ()
@@ -386,15 +385,15 @@ Example setup:
     (let ((first-time t)
           (last-line (line-number-at-pos end)))
       (unwind-protect
-           (save-excursion
-             (goto-char start)
-             (loop (if (and (<= (line-number-at-pos) last-line)
-                            (not (= (point) (point-max))))
-                       (progn (wmi-indent-line-internal
-                               (+ end wmi-character-count-difference))
-                              (forward-line))
-                       (return))
-                   (setq wmi-inside-alien-sequence t)))
+          (save-excursion
+            (goto-char start)
+            (loop (if (and (<= (line-number-at-pos) last-line)
+                           (not (= (point) (point-max))))
+                      (progn (wmi-indent-line-internal
+                              (+ end wmi-character-count-difference))
+                             (forward-line))
+                    (return))
+                  (setq wmi-inside-alien-sequence t)))
         (setq wmi-inside-alien-sequence nil)))
     (message "WMI: Indentation complete")))
 
@@ -422,7 +421,7 @@ Example usage:
   :lighter " W"
   (if web-mixed-indentation-mode
       (wmi-enable)
-      (wmi-disable)))
+    (wmi-disable)))
 
 (defalias 'wmi-mode 'web-mixed-indentation-mode)
 (defvaralias 'wmi-mode 'web-mixed-indentation-mode)
